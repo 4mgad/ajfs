@@ -7,6 +7,7 @@ exports.getFileExtension = getFileExtension;
 exports.mkdirs = mkdirs;
 exports.cp = cp;
 exports.rm = rm;
+exports.walk = walk;
 
 var _fs = require("fs");
 
@@ -189,6 +190,40 @@ var _createDirs = function _createDirs(dir) {
 	}
 };
 
+var _traverseDir = function _traverseDir(dir) {
+	var onDir = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : noop;
+	var onFile = arguments.length > 2 && arguments[2] !== undefined ? arguments[2] : noop;
+
+	if (_fs2.default.existsSync(dir)) {
+		var files = _fs2.default.readdirSync(dir);
+		var count = files.length;
+		var check = function check(decrement) {
+			decrement && count--;
+			if (count <= 0) {
+				onDir(null, dir);
+			}
+		};
+		check();
+		files.forEach(function (file) {
+			var filePath = dir + "/" + file;
+			if (_fs2.default.statSync(filePath).isDirectory()) {
+				// traverse dir recuresively
+				_traverseDir(filePath, function (err, dPath) {
+					onDir(err, dPath);
+					if (!err && dPath === filePath) {
+						check(true);
+					}
+				}, onFile);
+			} else {
+				onFile(null, filePath);
+				check(true);
+			}
+		});
+	} else {
+		onDir(dir + " does not exist");
+	}
+};
+
 function getFileExtension(filePath) {
 	var i = filePath.lastIndexOf('.');
 	return i < 0 ? '' : filePath.substr(i + 1);
@@ -196,10 +231,10 @@ function getFileExtension(filePath) {
 
 function mkdirs(_ref) {
 	var path = _ref.path,
-	    _ref$onComplete = _ref.onComplete,
-	    onComplete = _ref$onComplete === undefined ? noop : _ref$onComplete,
 	    _ref$onDirCreate = _ref.onDirCreate,
-	    onDirCreate = _ref$onDirCreate === undefined ? noop : _ref$onDirCreate;
+	    onDirCreate = _ref$onDirCreate === undefined ? noop : _ref$onDirCreate,
+	    _ref$onComplete = _ref.onComplete,
+	    onComplete = _ref$onComplete === undefined ? noop : _ref$onComplete;
 
 	if (_fs2.default.existsSync(path)) {
 		onComplete(null, path);
@@ -220,12 +255,12 @@ function mkdirs(_ref) {
 function cp(_ref2) {
 	var src = _ref2.src,
 	    dest = _ref2.dest,
-	    _ref2$onComplete = _ref2.onComplete,
-	    onComplete = _ref2$onComplete === undefined ? noop : _ref2$onComplete,
 	    _ref2$onDirCopy = _ref2.onDirCopy,
 	    onDirCopy = _ref2$onDirCopy === undefined ? noop : _ref2$onDirCopy,
 	    _ref2$onFileCopy = _ref2.onFileCopy,
-	    onFileCopy = _ref2$onFileCopy === undefined ? noop : _ref2$onFileCopy;
+	    onFileCopy = _ref2$onFileCopy === undefined ? noop : _ref2$onFileCopy,
+	    _ref2$onComplete = _ref2.onComplete,
+	    onComplete = _ref2$onComplete === undefined ? noop : _ref2$onComplete;
 
 	if (_fs2.default.existsSync(src)) {
 		if (_fs2.default.lstatSync(src).isDirectory()) {
@@ -249,12 +284,12 @@ function cp(_ref2) {
 
 function rm(_ref3) {
 	var dir = _ref3.dir,
-	    _ref3$onComplete = _ref3.onComplete,
-	    onComplete = _ref3$onComplete === undefined ? noop : _ref3$onComplete,
 	    _ref3$onDirDelete = _ref3.onDirDelete,
 	    onDirDelete = _ref3$onDirDelete === undefined ? noop : _ref3$onDirDelete,
 	    _ref3$onFileDelete = _ref3.onFileDelete,
-	    onFileDelete = _ref3$onFileDelete === undefined ? noop : _ref3$onFileDelete;
+	    onFileDelete = _ref3$onFileDelete === undefined ? noop : _ref3$onFileDelete,
+	    _ref3$onComplete = _ref3.onComplete,
+	    onComplete = _ref3$onComplete === undefined ? noop : _ref3$onComplete;
 
 	_deleteDir(dir, function (err, deletedDir) {
 		if (err) {
@@ -266,4 +301,25 @@ function rm(_ref3) {
 			}
 		}
 	}, onFileDelete);
+}
+
+function walk(_ref4) {
+	var dir = _ref4.dir,
+	    _ref4$onDir = _ref4.onDir,
+	    onDir = _ref4$onDir === undefined ? noop : _ref4$onDir,
+	    _ref4$onFile = _ref4.onFile,
+	    onFile = _ref4$onFile === undefined ? noop : _ref4$onFile,
+	    _ref4$onComplete = _ref4.onComplete,
+	    onComplete = _ref4$onComplete === undefined ? noop : _ref4$onComplete;
+
+	_traverseDir(dir, function (err, dirPath) {
+		if (err) {
+			onComplete(err);
+		} else {
+			onDir(null, dirPath);
+			if (dirPath === dir) {
+				onComplete(null, dirPath);
+			}
+		}
+	}, onFile);
 }

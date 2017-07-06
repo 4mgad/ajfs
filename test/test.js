@@ -5,7 +5,7 @@ const currPath = __dirname + "/";
 
 describe('ajfs', function () {
 
-	describe('#mkdirs({path, onComplete, onDirCreate})', function () {
+	describe('#mkdirs({path, onDirCreate, onComplete})', function () {
 		it('should create directories recursively', function (done) {
 			let numOfCreatedDirs = 0;
 			ajfs.mkdirs({
@@ -26,7 +26,7 @@ describe('ajfs', function () {
 		});
 	});
 
-	describe('#cp({src, dest, onComplete, onDirCopy, onFileCopy})', function () {
+	describe('#cp({src, dest, onDirCopy, onFileCopy, onComplete})', function () {
 		it('should copy css/styles.css to css/_styles.css and check if it exists', function (done) {
 			if (ajfs.existsSync(currPath + 'css/_styles.css')) {
 				ajfs.unlinkSync(currPath + 'css/_styles.css');
@@ -49,7 +49,7 @@ describe('ajfs', function () {
 		});
 	});
 
-	describe('#cp({src, dest, onComplete, onDirCopy, onFileCopy})', function () {
+	describe('#cp({src, dest, onDirCopy, onFileCopy, onComplete})', function () {
 		it('should copy directory from ' + currPath + 'js to ' + currPath + '_js and count number of copied directories and files', function (done) {
 			let numOfCopiedDirs = 0;
 			let numOfCopiedFiles = 0;
@@ -81,7 +81,7 @@ describe('ajfs', function () {
 		});
 	});
 
-	describe('#cp({src, dest, onComplete, onDirCopy, onFileCopy})', function () {
+	describe('#cp({src, dest, onDirCopy, onFileCopy, onComplete})', function () {
 		it('should throw an error due to absence of src directory', function (done) {
 			ajfs.cp({
 				src: 'nosrcdir',
@@ -93,7 +93,7 @@ describe('ajfs', function () {
 		});
 	});
 
-	describe('#cp({src, dest, onComplete, onDirCopy, onFileCopy})', function () {
+	describe('#cp({src, dest, onDirCopy, onFileCopy, onComplete})', function () {
 		it('should throw an error because a directory can not be copied to one of its subdirectories', function (done) {
 			ajfs.cp({
 				src: currPath + 'js',
@@ -105,7 +105,7 @@ describe('ajfs', function () {
 		});
 	});
 
-	describe('#rm({dir, onComplete, onDirDelete, onFileDelete})', function () {
+	describe('#rm({dir, onDirDelete, onFileDelete, onComplete})', function () {
 		it('should delete ' + currPath + '_js directory and its subdirectories and count number of deleted directories and files', function (done) {
 			let numOfDeletedDirs = 0;
 			let numOfDeletedFiles = 0;
@@ -136,7 +136,7 @@ describe('ajfs', function () {
 		});
 	});
 
-	describe('#rm({dir, onComplete, onDirDelete, onFileDelete})', function () {
+	describe('#rm({dir, onDirDelete, onFileDelete, onComplete})', function () {
 		it('should delete test1 directory and its subdirectories and count number of deleted directories', function (done) {
 			let numOfDeletedDirs = 0;
 			ajfs.rm({
@@ -161,12 +161,41 @@ describe('ajfs', function () {
 		});
 	});
 
-	describe('#rm({dir, onComplete, onDirDelete, onFileDelete})', function () {
+	describe('#rm({dir, onDirDelete, onFileDelete, onComplete})', function () {
 		it('should throw an error due to absence of directory', function (done) {
 			ajfs.rm({
 				dir: 'nodir',
 				onComplete: function (err, dirPath) {
 					!err ? done('no error was thrown') : done();
+				}
+			});
+		});
+	});
+
+	describe('#walk({dir, onDir, onFile, onComplete})', function () {
+		it('should traverse ' + currPath + 'js directory and its subdirectories and count number of directories and files', function (done) {
+			let numOfDirs = 0;
+			let numOfFiles = 0;
+			ajfs.walk({
+				dir: currPath + 'js',
+				onDir: function (err, dirPath) {
+					!err ? numOfDirs++ : done(err);
+				},
+				onFile: function (err, filePath) {
+					!err ? numOfFiles++ : done(err);
+				},
+				onComplete: function (err, dirPath) {
+					if (err) {
+						done(err);
+					} else {
+						if (numOfDirs !== 3) {
+							done("number of directories: Expected 3, Actual " + numOfDirs);
+						} else if (numOfFiles !== 11) {
+							done("number of files: Expected 11, Actual " + numOfFiles);
+						} else {
+							done();
+						}
+					}
 				}
 			});
 		});

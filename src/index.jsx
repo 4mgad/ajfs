@@ -153,12 +153,43 @@ const _createDirs = (dir, onCreateDir = noop) => {
 	}
 };
 
+const _traverseDir = (dir, onDir = noop, onFile = noop) => {
+	if (fs.existsSync(dir)) {
+		let files = fs.readdirSync(dir);
+		let count = files.length;
+		let check = (decrement) => {
+			decrement && count--;
+			if (count <= 0) {
+				onDir(null, dir);
+			}
+		};
+		check();
+		files.forEach((file) => {
+				let filePath = dir + "/" + file;
+				if (fs.statSync(filePath).isDirectory()) {// traverse dir recuresively
+					_traverseDir(filePath, (err, dPath) => {
+						onDir(err, dPath);
+						if (!err && dPath === filePath) {
+							check(true);
+						}
+					}, onFile);
+				} else {
+					onFile(null, filePath);
+					check(true);
+				}
+			}
+		);
+	} else {
+		onDir(dir + " does not exist");
+	}
+};
+
 export function getFileExtension(filePath) {
 	let i = filePath.lastIndexOf('.');
 	return (i < 0) ? '' : filePath.substr(i + 1);
 }
 
-export function mkdirs({path, onComplete = noop, onDirCreate = noop}) {
+export function mkdirs({path, onDirCreate = noop, onComplete = noop}) {
 	if (fs.existsSync(path)) {
 		onComplete(null, path);
 	} else {
@@ -175,7 +206,7 @@ export function mkdirs({path, onComplete = noop, onDirCreate = noop}) {
 	}
 }
 
-export function cp({src, dest, onComplete = noop, onDirCopy = noop, onFileCopy = noop}) {
+export function cp({src, dest, onDirCopy = noop, onFileCopy = noop, onComplete = noop}) {
 	if (fs.existsSync(src)) {
 		if (fs.lstatSync(src).isDirectory()) {
 			_copyDir(src, dest, (err, _src, _dest) => {
@@ -196,7 +227,7 @@ export function cp({src, dest, onComplete = noop, onDirCopy = noop, onFileCopy =
 	}
 }
 
-export function rm({dir, onComplete = noop, onDirDelete = noop, onFileDelete = noop}) {
+export function rm({dir, onDirDelete = noop, onFileDelete = noop, onComplete = noop}) {
 	_deleteDir(dir, (err, deletedDir) => {
 		if (err) {
 			onComplete(err);
@@ -207,6 +238,19 @@ export function rm({dir, onComplete = noop, onDirDelete = noop, onFileDelete = n
 			}
 		}
 	}, onFileDelete);
+}
+
+export function walk({dir, onDir = noop, onFile = noop, onComplete = noop}) {
+	_traverseDir(dir, (err, dirPath) => {
+		if (err) {
+			onComplete(err);
+		} else {
+			onDir(null, dirPath);
+			if (dirPath === dir) {
+				onComplete(null, dirPath);
+			}
+		}
+	}, onFile);
 }
 
 export * from 'fs';
