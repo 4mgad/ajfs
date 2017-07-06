@@ -1,47 +1,51 @@
 import fs from 'fs';
 
-const _copyFile = (src, dest, onCopy) => {
-	let rd = fs.createReadStream(src);
-	rd.on("error", (err) => {
-		onCopy(err);
-	});
-	let wr = fs.createWriteStream(dest);
-	wr.on("error", (err) => {
-		onCopy(err);
-	});
-	wr.on("close", (err) => {
-		onCopy(err);
-	});
-	rd.pipe(wr);
+const noop = (() => {});
+
+const _copyFile = (src, dest, onFileCopy = noop) => {
+	if (fs.existsSync(src)) {
+		let rd = fs.createReadStream(src);
+		rd.on("error", (err) => {
+			onFileCopy(err);
+		});
+		let wr = fs.createWriteStream(dest);
+		wr.on("error", (err) => {
+			onFileCopy(err);
+		});
+		wr.on("close", (err) => {
+			onFileCopy(err);
+		});
+		rd.pipe(wr);
+	} else {
+		onFileCopy(src + " does not exist");
+	}
 };
 
-const _copyDir = (src, dest, onCopyDir, onCopyFile) => {
-	onCopyFile = onCopyFile || (() => {});
-	onCopyDir = onCopyDir || (() => {});
+const _copyDir = (src, dest, onDirCopy = noop, onFileCopy = noop) => {
 	if (fs.existsSync(src)) {
 		fs.mkdir(dest, (err) => {
 			if (err) {
-				onCopyDir(err);
+				onDirCopy(err);
 			} else {
 				let rsrc = fs.realpathSync(src);
 				let rdest = fs.realpathSync(dest);
 				if (rdest.substr(0, rsrc.length) === rsrc) {
 					_deleteDir(rdest, (err, deletedDir) => {
 						if (err) {
-							onCopyDir(err);
+							onDirCopy(err);
 						}
 					});
-					onCopyDir('Copying to a sub directory is not allowed');
+					onDirCopy('Copying to a sub directory is not allowed');
 				} else {
 					fs.readdir(src, (err, files) => {
 						if (err) {
-							onCopyDir(err);
+							onDirCopy(err);
 						} else {
 							let count = files.length;
 							let check = (decrement) => {
 								decrement && count--;
 								if (count <= 0) {
-									onCopyDir(null, src, dest);
+									onDirCopy(null, src, dest);
 								}
 							};
 							check();
@@ -50,17 +54,17 @@ const _copyDir = (src, dest, onCopyDir, onCopyFile) => {
 								let df = dest + "/" + file;
 								if (fs.statSync(sf).isDirectory()) {// copy dir recuresively
 									_copyDir(sf, df, (err, sd, dd) => {
-										onCopyDir(err, sd, dd);
+										onDirCopy(err, sd, dd);
 										if (!err && sf === sd && df === dd) {
 											check(true);
 										}
-									}, onCopyFile);
+									}, onFileCopy);
 								} else {
 									_copyFile(sf, df, (err) => {
 										if (err) {
-											onCopyFile(err);
+											onFileCopy(err);
 										} else {
-											onCopyFile(null, sf, df);
+											onFileCopy(null, sf, df);
 											check(true);
 										}
 									});
@@ -72,44 +76,42 @@ const _copyDir = (src, dest, onCopyDir, onCopyFile) => {
 			}
 		});
 	} else {
-		onCopyDir(src + " does not exist");
+		onDirCopy(src + " does not exist");
 	}
 };
 
-const _deleteDir = (dirPath, onDeleteDir, onDeleteFile) => {
-	onDeleteDir = onDeleteDir || (() => {});
-	onDeleteFile = onDeleteFile || (() => {});
-	if (fs.existsSync(dirPath)) {
-		let files = fs.readdirSync(dirPath);
+const _deleteDir = (dir, onDirDelete = noop, onFileDelete = noop) => {
+	if (fs.existsSync(dir)) {
+		let files = fs.readdirSync(dir);
 		let count = files.length;
 		let check = (decrement) => {
 			decrement && count--;
 			if (count <= 0) {
-				fs.rmdir(dirPath, (err) => {
+				fs.rmdir(dir, (err) => {
 					if (err) {
-						onDeleteDir(err);
+						onDirDelete(err);
 					} else {
-						onDeleteDir(null, dirPath);
+						onDirDelete(null, dir);
 					}
 				});
 			}
 		};
 		check();
 		files.forEach((file) => {
-				let filePath = dirPath + "/" + file;
+				let filePath = dir + "/" + file;
 				if (fs.statSync(filePath).isDirectory()) {// delete dir recuresively
 					_deleteDir(filePath, (err, dPath) => {
-						onDeleteDir(err, dPath);
+						onDirDelete(err, dPath);
 						if (!err && dPath === filePath) {
 							check(true);
 						}
-					}, onDeleteFile);
+					}, onFileDelete);
 				} else { // delete file
 					fs.unlink(filePath, (err) => {
 						if (err) {
-							onDeleteFile(err);
+							onFileDelete(err);
 						} else {
-							onDeleteFile(null, filePath);
+							onFileDelete(null, filePath);
 							check(true);
 						}
 					});
@@ -117,19 +119,18 @@ const _deleteDir = (dirPath, onDeleteDir, onDeleteFile) => {
 			}
 		);
 	} else {
-		onDeleteDir(dirPath + " does not exist");
+		onDirDelete(dir + " does not exist");
 	}
 };
 
-const _createDirs = (dirPath, onCreateDir) => {
-	onCreateDir = onCreateDir || (() => {});
+const _createDirs = (dir, onCreateDir = noop) => {
 	let createDir = (dir) => {
 		if (!fs.existsSync(dir)) {
 			fs.mkdirSync(dir);
 			onCreateDir(null, dir);
 		}
 	};
-	let dirArr = dirPath.split('/');
+	let dirArr = dir.split('/');
 	let currDir = '';
 	try {
 		dirArr.forEach((dir, idx) => {
@@ -152,64 +153,60 @@ const _createDirs = (dirPath, onCreateDir) => {
 	}
 };
 
-export function getExtension(filePath) {
+export function getFileExtension(filePath) {
 	let i = filePath.lastIndexOf('.');
 	return (i < 0) ? '' : filePath.substr(i + 1);
 }
 
-export function copyFile(src, dest, onComplete) {
-	_copyFile(src, dest, onComplete);
-}
-
-export function copyDir(src, dest, onComplete, onCopyDir, onCopyFile) {
-	onComplete = onComplete || (() => {});
-	onCopyDir = onCopyDir || (() => {});
-	onCopyFile = onCopyFile || (() => {});
-	_copyDir(src, dest, (err, _src, _dest) => {
-		if (err) {
-			onComplete(err);
-		} else {
-			onCopyDir(null, _src, _dest);
-			if (dest === _dest) {
-				onComplete(null, src, dest);
-			}
-		}
-	}, onCopyFile);
-}
-
-export function deleteDir(dirPath, onComplete, onDeleteDir, onDeleteFile) {
-	onComplete = onComplete || (() => {});
-	onDeleteDir = onDeleteDir || (() => {});
-	onDeleteFile = onDeleteFile || (() => {});
-	_deleteDir(dirPath, (err, deletedDir) => {
-		if (err) {
-			onComplete(err);
-		} else {
-			onDeleteDir(null, deletedDir);
-			if (deletedDir === dirPath) {
-				onComplete(null, deletedDir);
-			}
-		}
-	}, onDeleteFile);
-}
-
-export function createDirs(dirPath, onComplete, onCreateDir) {
-	onComplete = onComplete || (() => {});
-	onCreateDir = onCreateDir || (() => {});
-	if (fs.existsSync(dirPath)) {
-		onComplete(null, dirPath);
+export function mkdirs({path, onComplete = noop, onDirCreate = noop}) {
+	if (fs.existsSync(path)) {
+		onComplete(null, path);
 	} else {
-		_createDirs(dirPath, (err, createdDir) => {
+		_createDirs(path, (err, createdDir) => {
 			if (err) {
 				onComplete(err);
 			} else {
-				onCreateDir(null, createdDir);
-				if (createdDir === dirPath) {
+				onDirCreate(null, createdDir);
+				if (createdDir === path) {
 					onComplete(null, createdDir);
 				}
 			}
 		});
 	}
+}
+
+export function cp({src, dest, onComplete = noop, onDirCopy = noop, onFileCopy = noop}) {
+	if (fs.existsSync(src)) {
+		if (fs.lstatSync(src).isDirectory()) {
+			_copyDir(src, dest, (err, _src, _dest) => {
+				if (err) {
+					onComplete(err);
+				} else {
+					onDirCopy(null, _src, _dest);
+					if (dest === _dest) {
+						onComplete(null, src, dest);
+					}
+				}
+			}, onFileCopy);
+		} else {
+			_copyFile(src, dest, onComplete);
+		}
+	} else {
+		onComplete(src + " does not exist");
+	}
+}
+
+export function rm({dir, onComplete = noop, onDirDelete = noop, onFileDelete = noop}) {
+	_deleteDir(dir, (err, deletedDir) => {
+		if (err) {
+			onComplete(err);
+		} else {
+			onDirDelete(null, deletedDir);
+			if (deletedDir === dir) {
+				onComplete(null, deletedDir);
+			}
+		}
+	}, onFileDelete);
 }
 
 export * from 'fs';

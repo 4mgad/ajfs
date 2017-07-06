@@ -3,11 +3,10 @@
 Object.defineProperty(exports, "__esModule", {
 	value: true
 });
-exports.getExtension = getExtension;
-exports.copyFile = copyFile;
-exports.copyDir = copyDir;
-exports.deleteDir = deleteDir;
-exports.createDirs = createDirs;
+exports.getFileExtension = getFileExtension;
+exports.mkdirs = mkdirs;
+exports.cp = cp;
+exports.rm = rm;
 
 var _fs = require("fs");
 
@@ -25,48 +24,57 @@ var _fs2 = _interopRequireDefault(_fs);
 
 function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
 
-var _copyFile = function _copyFile(src, dest, onCopy) {
-	var rd = _fs2.default.createReadStream(src);
-	rd.on("error", function (err) {
-		onCopy(err);
-	});
-	var wr = _fs2.default.createWriteStream(dest);
-	wr.on("error", function (err) {
-		onCopy(err);
-	});
-	wr.on("close", function (err) {
-		onCopy(err);
-	});
-	rd.pipe(wr);
+var noop = function noop() {};
+
+var _copyFile = function _copyFile(src, dest) {
+	var onFileCopy = arguments.length > 2 && arguments[2] !== undefined ? arguments[2] : noop;
+
+	if (_fs2.default.existsSync(src)) {
+		var rd = _fs2.default.createReadStream(src);
+		rd.on("error", function (err) {
+			onFileCopy(err);
+		});
+		var wr = _fs2.default.createWriteStream(dest);
+		wr.on("error", function (err) {
+			onFileCopy(err);
+		});
+		wr.on("close", function (err) {
+			onFileCopy(err);
+		});
+		rd.pipe(wr);
+	} else {
+		onFileCopy(src + " does not exist");
+	}
 };
 
-var _copyDir = function _copyDir(src, dest, onCopyDir, onCopyFile) {
-	onCopyFile = onCopyFile || function () {};
-	onCopyDir = onCopyDir || function () {};
+var _copyDir = function _copyDir(src, dest) {
+	var onDirCopy = arguments.length > 2 && arguments[2] !== undefined ? arguments[2] : noop;
+	var onFileCopy = arguments.length > 3 && arguments[3] !== undefined ? arguments[3] : noop;
+
 	if (_fs2.default.existsSync(src)) {
 		_fs2.default.mkdir(dest, function (err) {
 			if (err) {
-				onCopyDir(err);
+				onDirCopy(err);
 			} else {
 				var rsrc = _fs2.default.realpathSync(src);
 				var rdest = _fs2.default.realpathSync(dest);
 				if (rdest.substr(0, rsrc.length) === rsrc) {
 					_deleteDir(rdest, function (err, deletedDir) {
 						if (err) {
-							onCopyDir(err);
+							onDirCopy(err);
 						}
 					});
-					onCopyDir('Copying to a sub directory is not allowed');
+					onDirCopy('Copying to a sub directory is not allowed');
 				} else {
 					_fs2.default.readdir(src, function (err, files) {
 						if (err) {
-							onCopyDir(err);
+							onDirCopy(err);
 						} else {
 							var count = files.length;
 							var check = function check(decrement) {
 								decrement && count--;
 								if (count <= 0) {
-									onCopyDir(null, src, dest);
+									onDirCopy(null, src, dest);
 								}
 							};
 							check();
@@ -76,17 +84,17 @@ var _copyDir = function _copyDir(src, dest, onCopyDir, onCopyFile) {
 								if (_fs2.default.statSync(sf).isDirectory()) {
 									// copy dir recuresively
 									_copyDir(sf, df, function (err, sd, dd) {
-										onCopyDir(err, sd, dd);
+										onDirCopy(err, sd, dd);
 										if (!err && sf === sd && df === dd) {
 											check(true);
 										}
-									}, onCopyFile);
+									}, onFileCopy);
 								} else {
 									_copyFile(sf, df, function (err) {
 										if (err) {
-											onCopyFile(err);
+											onFileCopy(err);
 										} else {
-											onCopyFile(null, sf, df);
+											onFileCopy(null, sf, df);
 											check(true);
 										}
 									});
@@ -98,65 +106,67 @@ var _copyDir = function _copyDir(src, dest, onCopyDir, onCopyFile) {
 			}
 		});
 	} else {
-		onCopyDir(src + " does not exist");
+		onDirCopy(src + " does not exist");
 	}
 };
 
-var _deleteDir = function _deleteDir(dirPath, onDeleteDir, onDeleteFile) {
-	onDeleteDir = onDeleteDir || function () {};
-	onDeleteFile = onDeleteFile || function () {};
-	if (_fs2.default.existsSync(dirPath)) {
-		var files = _fs2.default.readdirSync(dirPath);
+var _deleteDir = function _deleteDir(dir) {
+	var onDirDelete = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : noop;
+	var onFileDelete = arguments.length > 2 && arguments[2] !== undefined ? arguments[2] : noop;
+
+	if (_fs2.default.existsSync(dir)) {
+		var files = _fs2.default.readdirSync(dir);
 		var count = files.length;
 		var check = function check(decrement) {
 			decrement && count--;
 			if (count <= 0) {
-				_fs2.default.rmdir(dirPath, function (err) {
+				_fs2.default.rmdir(dir, function (err) {
 					if (err) {
-						onDeleteDir(err);
+						onDirDelete(err);
 					} else {
-						onDeleteDir(null, dirPath);
+						onDirDelete(null, dir);
 					}
 				});
 			}
 		};
 		check();
 		files.forEach(function (file) {
-			var filePath = dirPath + "/" + file;
+			var filePath = dir + "/" + file;
 			if (_fs2.default.statSync(filePath).isDirectory()) {
 				// delete dir recuresively
 				_deleteDir(filePath, function (err, dPath) {
-					onDeleteDir(err, dPath);
+					onDirDelete(err, dPath);
 					if (!err && dPath === filePath) {
 						check(true);
 					}
-				}, onDeleteFile);
+				}, onFileDelete);
 			} else {
 				// delete file
 				_fs2.default.unlink(filePath, function (err) {
 					if (err) {
-						onDeleteFile(err);
+						onFileDelete(err);
 					} else {
-						onDeleteFile(null, filePath);
+						onFileDelete(null, filePath);
 						check(true);
 					}
 				});
 			}
 		});
 	} else {
-		onDeleteDir(dirPath + " does not exist");
+		onDirDelete(dir + " does not exist");
 	}
 };
 
-var _createDirs = function _createDirs(dirPath, onCreateDir) {
-	onCreateDir = onCreateDir || function () {};
+var _createDirs = function _createDirs(dir) {
+	var onCreateDir = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : noop;
+
 	var createDir = function createDir(dir) {
 		if (!_fs2.default.existsSync(dir)) {
 			_fs2.default.mkdirSync(dir);
 			onCreateDir(null, dir);
 		}
 	};
-	var dirArr = dirPath.split('/');
+	var dirArr = dir.split('/');
 	var currDir = '';
 	try {
 		dirArr.forEach(function (dir, idx) {
@@ -179,62 +189,81 @@ var _createDirs = function _createDirs(dirPath, onCreateDir) {
 	}
 };
 
-function getExtension(filePath) {
+function getFileExtension(filePath) {
 	var i = filePath.lastIndexOf('.');
 	return i < 0 ? '' : filePath.substr(i + 1);
 }
 
-function copyFile(src, dest, onComplete) {
-	_copyFile(src, dest, onComplete);
-}
+function mkdirs(_ref) {
+	var path = _ref.path,
+	    _ref$onComplete = _ref.onComplete,
+	    onComplete = _ref$onComplete === undefined ? noop : _ref$onComplete,
+	    _ref$onDirCreate = _ref.onDirCreate,
+	    onDirCreate = _ref$onDirCreate === undefined ? noop : _ref$onDirCreate;
 
-function copyDir(src, dest, onComplete, onCopyDir, onCopyFile) {
-	onComplete = onComplete || function () {};
-	onCopyDir = onCopyDir || function () {};
-	onCopyFile = onCopyFile || function () {};
-	_copyDir(src, dest, function (err, _src, _dest) {
-		if (err) {
-			onComplete(err);
-		} else {
-			onCopyDir(null, _src, _dest);
-			if (dest === _dest) {
-				onComplete(null, src, dest);
-			}
-		}
-	}, onCopyFile);
-}
-
-function deleteDir(dirPath, onComplete, onDeleteDir, onDeleteFile) {
-	onComplete = onComplete || function () {};
-	onDeleteDir = onDeleteDir || function () {};
-	onDeleteFile = onDeleteFile || function () {};
-	_deleteDir(dirPath, function (err, deletedDir) {
-		if (err) {
-			onComplete(err);
-		} else {
-			onDeleteDir(null, deletedDir);
-			if (deletedDir === dirPath) {
-				onComplete(null, deletedDir);
-			}
-		}
-	}, onDeleteFile);
-}
-
-function createDirs(dirPath, onComplete, onCreateDir) {
-	onComplete = onComplete || function () {};
-	onCreateDir = onCreateDir || function () {};
-	if (_fs2.default.existsSync(dirPath)) {
-		onComplete(null, dirPath);
+	if (_fs2.default.existsSync(path)) {
+		onComplete(null, path);
 	} else {
-		_createDirs(dirPath, function (err, createdDir) {
+		_createDirs(path, function (err, createdDir) {
 			if (err) {
 				onComplete(err);
 			} else {
-				onCreateDir(null, createdDir);
-				if (createdDir === dirPath) {
+				onDirCreate(null, createdDir);
+				if (createdDir === path) {
 					onComplete(null, createdDir);
 				}
 			}
 		});
 	}
+}
+
+function cp(_ref2) {
+	var src = _ref2.src,
+	    dest = _ref2.dest,
+	    _ref2$onComplete = _ref2.onComplete,
+	    onComplete = _ref2$onComplete === undefined ? noop : _ref2$onComplete,
+	    _ref2$onDirCopy = _ref2.onDirCopy,
+	    onDirCopy = _ref2$onDirCopy === undefined ? noop : _ref2$onDirCopy,
+	    _ref2$onFileCopy = _ref2.onFileCopy,
+	    onFileCopy = _ref2$onFileCopy === undefined ? noop : _ref2$onFileCopy;
+
+	if (_fs2.default.existsSync(src)) {
+		if (_fs2.default.lstatSync(src).isDirectory()) {
+			_copyDir(src, dest, function (err, _src, _dest) {
+				if (err) {
+					onComplete(err);
+				} else {
+					onDirCopy(null, _src, _dest);
+					if (dest === _dest) {
+						onComplete(null, src, dest);
+					}
+				}
+			}, onFileCopy);
+		} else {
+			_copyFile(src, dest, onComplete);
+		}
+	} else {
+		onComplete(src + " does not exist");
+	}
+}
+
+function rm(_ref3) {
+	var dir = _ref3.dir,
+	    _ref3$onComplete = _ref3.onComplete,
+	    onComplete = _ref3$onComplete === undefined ? noop : _ref3$onComplete,
+	    _ref3$onDirDelete = _ref3.onDirDelete,
+	    onDirDelete = _ref3$onDirDelete === undefined ? noop : _ref3$onDirDelete,
+	    _ref3$onFileDelete = _ref3.onFileDelete,
+	    onFileDelete = _ref3$onFileDelete === undefined ? noop : _ref3$onFileDelete;
+
+	_deleteDir(dir, function (err, deletedDir) {
+		if (err) {
+			onComplete(err);
+		} else {
+			onDirDelete(null, deletedDir);
+			if (deletedDir === dir) {
+				onComplete(null, deletedDir);
+			}
+		}
+	}, onFileDelete);
 }

@@ -8,11 +8,10 @@ Example:
 ```
 var ajfs = require("ajfs");
 
-ajfs.cp({src, dest, onComplete});
+ajfs.mkdirs({path, onCreateDir, onComplete}); //create directories and subdirectories
 
-ajfs.cp({src, dest, onComplete, onDirCopy, onFileCopy});
+ajfs.cp({src, dest, onDirCopy, onFileCopy, onComplete}); //copy directory and subdirectories
 
-ajfs.rm({dir, onComplete, onDirDelete, onFileDelete});
+ajfs.rm({dir, onDirDelete, onFileDelete, onComplete}); //remove directory and subdirectories
 
-ajfs.mkdir({dirPath, onComplete, onCreateDir});
 ```
